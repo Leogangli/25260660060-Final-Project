@@ -17,6 +17,17 @@ def sha256_of(path: str | Path) -> str:
     return h.hexdigest()
 
 
+def sha256_of_files(paths: list[str]) -> str:
+    """按给定顺序计算输入文件集合的 SHA-256；单文件直接使用其内容哈希。"""
+    if len(paths) == 1:
+        return sha256_of(paths[0])
+    h = hashlib.sha256()
+    for path in paths:
+        h.update(sha256_of(path).encode("ascii"))
+        h.update(b"\n")
+    return h.hexdigest()
+
+
 @dataclass
 class StageState:
     status: str = "pending"  # pending/running/done/failed/skipped
@@ -37,7 +48,7 @@ class RunState:
 
     def is_fresh(self, stage: str, input_hash: str) -> bool:
         s = self.stages.get(stage)
-        return bool(s and s.status == "done" and s.input_hash == input_hash)
+        return bool(s and s.status in {"done", "skipped"} and s.input_hash == input_hash)
 
     def invalidate_from(self, stage_ids: list[str], start: str):
         """输入变化时：将 start 及其下游全部置回 pending。"""
