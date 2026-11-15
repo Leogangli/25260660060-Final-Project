@@ -86,26 +86,27 @@ def test_qc_report_contains_every_finding(data, tmp_path: Path):
         assert finding["check"] in report
 
 
-def test_run_workflow_s0_s1_s3_s4_and_resume(tmp_path: Path, capsys: pytest.CaptureFixture):
+def test_run_workflow_through_s6_and_resume(tmp_path: Path, capsys: pytest.CaptureFixture):
     run_root = tmp_path / "runs"
     first = run_workflow("2026-10", run_root=run_root)
-    assert first.state.stages["S0_ingest"].status == "done"
-    assert first.state.stages["S1_qc"].status == "done"
-    assert first.state.stages["S3_statements"].status == "done"
-    assert first.state.stages["S4_analysis"].status == "done"
+    stage_ids = ["S0_ingest", "S1_qc", "S2_closecheck", "S3_statements", "S4_analysis", "S5_report", "S6_verify"]
+    for stage_id in stage_ids:
+        assert first.state.stages[stage_id].status == "done"
     assert (run_root / "2026-10" / "tb_normalized.csv").exists()
     assert "总体结论：PASS" in (run_root / "2026-10" / "qc_report.md").read_text(encoding="utf-8")
-    for name in ["bs.csv", "bs.md", "is.csv", "is.md", "metrics.csv", "anomalies.json", "anomalies.md"]:
+    for name in [
+        "closecheck_report.md", "bs.csv", "bs.md", "is.csv", "is.md",
+        "metrics.csv", "anomalies.json", "anomalies.md", "report_v1.md", "verify_report_r1.md",
+    ]:
         assert (run_root / "2026-10" / name).exists()
+    assert "总体结论：PASS" in (run_root / "2026-10" / "verify_report_r1.md").read_text(encoding="utf-8")
 
     capsys.readouterr()
     resumed = run_workflow("2026-10", resume=True, run_root=run_root)
     output = capsys.readouterr().out
-    assert resumed.state.stages["S0_ingest"].status == "skipped"
-    assert resumed.state.stages["S1_qc"].status == "skipped"
-    assert resumed.state.stages["S3_statements"].status == "skipped"
-    assert resumed.state.stages["S4_analysis"].status == "skipped"
-    assert output.count("[skipped]") == 4
+    for stage_id in stage_ids:
+        assert resumed.state.stages[stage_id].status == "skipped"
+    assert output.count("[skipped]") == 7
 
 
 

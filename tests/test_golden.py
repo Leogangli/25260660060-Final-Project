@@ -54,4 +54,3 @@ def test_metrics_numbers_match_tb(data):
 
 # TODO(Kimi Code): 追加
 # - 中断恢复测试：S4 后 kill，resume 时断言 S0–S3 状态为 skipped（docs/03 验收清单第 4 条）
-# - 报告引用溯源抽检（S6 完成后）

@@ -91,9 +91,61 @@ class Orchestrator:
 
         raise AssertionError("阶段执行循环不可达")
 
-    def revision_loop(self, write_fn, verify_fn):
-        """S5/S6 有界修订循环：REJECT → 修复任务包路由回 Writer，≤ MAX_REVISION_ROUNDS。"""
-        raise NotImplementedError("TODO(Kimi Code): 见 docs/03 P5")
+    def revision_loop(self, write_fn, verify_fn, input_files: list[str] | None = None) -> bool:
+        """初稿加最多两轮修订；核验问题作为修复任务包路由回 Writer。"""
+        input_hash = sha256_of_files(input_files or [])
+        fresh = self.state.is_fresh("S5_report", input_hash) and self.state.is_fresh("S6_verify", input_hash)
+        if fresh:
+            for stage_id in ["S5_report", "S6_verify"]:
+                self.state.stages[stage_id].status = "skipped"
+                print(f"[skipped] {stage_id}: 输入哈希未变")
+            self.state.log_decision("跳过", "S5/S6 已完成且输入哈希未变")
+            self.store.save(self.state)
+            return False
+
+        if any(stage in self.state.stages for stage in ["S5_report", "S6_verify"]):
+            self.state.invalidate_from(STAGE_ORDER, "S5_report")
+            self.state.log_decision("失效", "S5/S6 未完成或输入哈希变化，修订循环重新执行")
+            self.store.save(self.state)
+
+        reports = []
+        verifications = []
+        repair_package = []
+        for round_number in range(1, MAX_REVISION_ROUNDS + 2):
+            self.state.stages["S5_report"] = StageState(status="running", input_hash=input_hash)
+            self.store.save(self.state)
+            report_path = write_fn(round_number, repair_package)
+            reports.append(str(report_path))
+            self.state.mark_done("S5_report", input_hash, reports)
+            self.store.save(self.state)
+            print(f"[done] S5_report: report_v{round_number}.md")
+
+            self.state.stages["S6_verify"] = StageState(status="running", input_hash=input_hash)
+            self.store.save(self.state)
+            result = verify_fn(round_number, report_path)
+            verifications.extend(result.get("artifacts", []))
+            passed = bool(result["passed"])
+            if passed:
+                self.state.mark_done("S6_verify", input_hash, verifications)
+                self.state.log_decision("通过", f"S6 第 {round_number} 轮核验 PASS")
+                self.store.save(self.state)
+                print("[done] S6_verify: PASS")
+                return True
+
+            self.state.stages["S6_verify"] = StageState(
+                status="failed", input_hash=input_hash, artifacts=verifications
+            )
+            repair_package = result.get("issues", [])
+            self.state.log_decision("修订", f"S6 第 {round_number} 轮核验 REJECT，问题 {len(repair_package)} 项")
+            self.store.save(self.state)
+            if round_number > MAX_REVISION_ROUNDS:
+                self.escalate(
+                    "S5/S6 修订 2 轮仍不收敛",
+                    {"轮次": round_number, "问题": repair_package},
+                )
+            print(f"[retry] S5_report: 根据核验问题执行第 {round_number}/{MAX_REVISION_ROUNDS} 轮修订")
+
+        raise AssertionError("修订循环不可达")
 
     def human_approval_gate(self) -> bool:
         """S7：挂起等待人工批准（CLI 确认或 approval.json 落盘）。Orchestrator 无权自行放行。"""
