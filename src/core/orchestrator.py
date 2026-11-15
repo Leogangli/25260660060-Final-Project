@@ -31,7 +31,7 @@ class Orchestrator:
         self.run_dir = Path(run_root) / period
         self.store = StateStore(self.run_dir)
         prior = self.store.load() if resume else None
-        self.state = prior or RunState(period=period, run_id=f"{period}-{int(time.time())}")
+        self.state = prior or RunState(period=period, run_id=f"{period}-{time.time_ns()}")
 
     # ---- 核心调度 ----
     def run_stage(self, stage_id: str, fn, input_files: list[str]) -> bool:

@@ -50,8 +50,11 @@ def run_workflow(
     run_root: str | Path = "runs",
     tb_path: str | Path = TB_PATH,
     approval_handler=None,
+    stop_after: str | None = None,
 ) -> Orchestrator:
-    """执行 S0 至 S8；未获人工批准时在 S7 挂起且不归档。"""
+    """执行 S0 至 S8；测试可在 S4 停止，未获人工批准时在 S7 挂起。"""
+    if stop_after not in {None, "S4_analysis"}:
+        raise ValueError(f"不支持的中断停止点：{stop_after}")
     tb_path = Path(tb_path)
     previous = _previous_period(period)
     cfg = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -132,6 +135,8 @@ def run_workflow(
             str(orchestrator.run_dir / "is.csv"), str(CONFIG_PATH), str(ANALYSIS_PROMPT_PATH),
         ],
     )
+    if stop_after == "S4_analysis":
+        return orchestrator
 
     def write_stage(round_number: int, repair_package: list[dict]):
         tb = pd.read_csv(normalized_path, dtype={"科目代码": str})

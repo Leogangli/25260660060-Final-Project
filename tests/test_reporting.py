@@ -72,3 +72,15 @@ def test_verifier_shows_report_recalculation_and_source(data):
     assert "报告原文 1,400" in mismatch["证据"]
     assert "重算值 140" in mismatch["证据"]
     assert "来源 TB 1001+1002" in mismatch["证据"]
+
+
+
+def test_report_without_anomalies_passes_verification():
+    tb = pd.read_csv(TB_PATH, dtype={"科目代码": str})
+    thresholds = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))["thresholds"]
+    metrics = compute_metrics(tb, "2026-09", "2026-08")
+    anomalies = detect_anomalies(metrics, thresholds)
+    assert anomalies == []
+    report = build_report("2026-09", metrics, anomalies)
+
+    assert verify_report(report, tb, metrics, anomalies, thresholds) == []

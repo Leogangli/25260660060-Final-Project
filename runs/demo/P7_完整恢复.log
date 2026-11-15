@@ -1,0 +1,9 @@
+[skipped] S0_ingest: 输入哈希未变
+[skipped] S1_qc: 输入哈希未变
+[skipped] S2_closecheck: 输入哈希未变
+[skipped] S3_statements: 输入哈希未变
+[skipped] S4_analysis: 输入哈希未变
+[skipped] S5_report: 输入哈希未变
+[skipped] S6_verify: 输入哈希未变
+[skipped] S7_approval: 人工批准记录仍有效
+[skipped] S8_archive: 输入哈希未变

@@ -1,0 +1,22 @@
+[done] S0_ingest
+[PASS] 期间格式: {}
+[PASS] 必填字段: {}
+[PASS] 期间锁定: {}
+[PASS] 借贷平衡: {'代数和': 0.0}
+[PASS] 未知科目: {}
+[PASS] 余额方向: {}
+[done] S1_qc
+[done] S2_closecheck
+[done] S3_statements
+
+期间 2026-10 检出异常 5 条：
+  - A_AR 应收账款环比增幅: 本期值=0.4231 阈值=0.2 偏差=+22.31pp
+  - A_GAP 应收增幅-收入增幅: 本期值=32.0136 阈值=10 偏差=+22.01pp
+  - A_INV 存货环比增幅: 本期值=0.5882 阈值=0.25 偏差=+33.82pp
+  - A_GM 毛利率变动(pp): 本期值=-3.0000 阈值=-2 偏差=低于阈值1.00pp
+  - A_CASH 货币资金环比降幅: 本期值=-0.9269 阈值=-0.5 偏差=低于阈值42.69pp
+[done] S4_analysis
+[done] S5_report: report_v1.md
+[done] S6_verify: PASS
+请输入 CFO 批准人：是否批准归档？[y/N]：批准意见（可留空）：[done] S7_approval: CFO 已批准
+[done] S8_archive

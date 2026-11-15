@@ -1,0 +1,9 @@
+[skipped] S0_ingest: 输入哈希未变
+[skipped] S1_qc: 输入哈希未变
+[skipped] S2_closecheck: 输入哈希未变
+[skipped] S3_statements: 输入哈希未变
+[skipped] S4_analysis: 输入哈希未变
+[done] S5_report: report_v1.md
+[done] S6_verify: PASS
+请输入 CFO 批准人：是否批准归档？[y/N]：批准意见（可留空）：[done] S7_approval: CFO 已批准
+[done] S8_archive

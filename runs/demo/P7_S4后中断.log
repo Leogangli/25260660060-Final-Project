@@ -1,0 +1,14 @@
+[done] S0_ingest
+[PASS] 期间格式: {}
+[PASS] 必填字段: {}
+[PASS] 期间锁定: {}
+[PASS] 借贷平衡: {'代数和': 0.0}
+[PASS] 未知科目: {}
+[PASS] 余额方向: {}
+[done] S1_qc
+[done] S2_closecheck
+[done] S3_statements
+
+期间 2026-09 检出异常 0 条：
+[done] S4_analysis
+[interrupted] S4 完成后模拟 kill（退出码 137）
