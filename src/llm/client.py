@@ -27,9 +27,9 @@ class MockLLM:
         return f"[MockLLM 输出]\n{user[:500]}\n（以上内容为模板化占位输出，接入真实模型后替换）"
 
 
-def get_client() -> LLMClient:
+def get_client(responses: dict[str, str] | None = None) -> LLMClient:
     """工厂：配置了环境变量时返回真实客户端（TODO），否则 MockLLM。"""
     if os.environ.get("FINCLOSE_LLM_API_KEY"):
         # TODO(Kimi Code): 实现真实客户端（OpenAI 兼容接口），从 env 读 base_url/model/key
         raise NotImplementedError("真实 LLM 客户端待实现；当前请使用 MockLLM")
-    return MockLLM()
+    return MockLLM(responses)

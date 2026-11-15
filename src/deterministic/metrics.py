@@ -1,4 +1,4 @@
-"""S4 指标计算：确定性代码。归因解读由 LLM 完成（见 prompts/analysis-agent.md）。"""
+"""S4 指标计算与阈值规则：全部为确定性代码。"""
 from __future__ import annotations
 
 import pandas as pd
@@ -43,7 +43,7 @@ def compute_metrics(tb: pd.DataFrame, period: str, prev_period: str) -> dict:
                   "变动pp": (gm - gm_prev) * 100 if gm is not None and gm_prev is not None else None},
         "应收账款": {"本期": ar, "上期": ar_prev, "环比": growth(ar, ar_prev)},
         "存货": {"本期": inv, "上期": inv_prev, "环比": growth(inv, inv_prev)},
-        "货币资金": {"本期": cash, "上期": cash_prev, "环比": growth(cash, cash_prev)},
+        "货币资金": {"本期": cash, "上期": cash_prev, "环比": growth(cash, cash_prev), "变动额": cash - cash_prev},
         "短期借款": {"本期": st_loan, "上期": st_loan_prev, "新增": st_loan - st_loan_prev},
         "销售费用": {"本期": sell, "上期": sell_prev, "环比": growth(sell, sell_prev)},
         "管理费用": {"本期": adm, "上期": adm_prev, "环比": growth(adm, adm_prev)},
@@ -55,33 +55,84 @@ def compute_metrics(tb: pd.DataFrame, period: str, prev_period: str) -> dict:
     }
 
 
+def _higher_than(
+    id: str, name: str, value: float, threshold: float, evidence: dict, pp_input: bool = False
+) -> dict:
+    difference = value - threshold if pp_input else (value - threshold) * 100
+    return {
+        "id": id, "指标": name, "本期值": value, "阈值": threshold,
+        "偏差": f"{difference:+.2f}pp", "证据": evidence,
+    }
+
+
+def _lower_than(
+    id: str, name: str, value: float, threshold: float, evidence: dict, pp_input: bool = False
+) -> dict:
+    difference = threshold - value if pp_input else (threshold - value) * 100
+    return {
+        "id": id, "指标": name, "本期值": value, "阈值": threshold,
+        "偏差": f"低于阈值{difference:.2f}pp", "证据": evidence,
+    }
+
+
 def detect_anomalies(metrics: dict, thresholds: dict) -> list[dict]:
-    """按 config/workflow.yaml 的 thresholds 判定异常。只输出命中项。"""
+    """按 config/workflow.yaml 的 thresholds 判定异常，只输出命中项。"""
     out = []
     ar_g = metrics["应收账款"]["环比"]
     if ar_g is not None and ar_g > thresholds["ar_growth_qoq_pct"] / 100:
-        out.append({"id": "A_AR", "指标": "应收账款环比增幅", "本期值": ar_g,
-                    "阈值": thresholds["ar_growth_qoq_pct"] / 100,
-                    "证据": {"本期": metrics["应收账款"]["本期"], "上期": metrics["应收账款"]["上期"],
-                            "来源": "TB 1122"}})
+        out.append(_higher_than(
+            "A_AR", "应收账款环比增幅", ar_g, thresholds["ar_growth_qoq_pct"] / 100,
+            {"本期": metrics["应收账款"]["本期"], "上期": metrics["应收账款"]["上期"], "来源": "TB 1122"},
+        ))
+
     gap = metrics["应收收入背离pp"]
     if gap is not None and gap > thresholds["ar_vs_revenue_gap_pp"]:
-        out.append({"id": "A_GAP", "指标": "应收增幅-收入增幅", "本期值": gap,
-                    "阈值": thresholds["ar_vs_revenue_gap_pp"], "证据": {"来源": "TB 1122/6001"}})
+        out.append(_higher_than(
+            "A_GAP", "应收增幅-收入增幅", gap, thresholds["ar_vs_revenue_gap_pp"],
+            {
+                "应收本期": metrics["应收账款"]["本期"], "应收上期": metrics["应收账款"]["上期"],
+                "收入本期": metrics["营业收入"]["本期"], "收入上期": metrics["营业收入"]["上期"],
+                "来源": "TB 1122/6001",
+            }, pp_input=True,
+        ))
+
     inv_g = metrics["存货"]["环比"]
     if inv_g is not None and inv_g > thresholds["inventory_growth_qoq_pct"] / 100:
-        out.append({"id": "A_INV", "指标": "存货环比增幅", "本期值": inv_g,
-                    "阈值": thresholds["inventory_growth_qoq_pct"] / 100,
-                    "证据": {"本期": metrics["存货"]["本期"], "上期": metrics["存货"]["上期"],
-                            "来源": "TB 1403"}})
+        out.append(_higher_than(
+            "A_INV", "存货环比增幅", inv_g, thresholds["inventory_growth_qoq_pct"] / 100,
+            {"本期": metrics["存货"]["本期"], "上期": metrics["存货"]["上期"], "来源": "TB 1403"},
+        ))
+
     gm_drop = metrics["毛利率"]["变动pp"]
     if gm_drop is not None and gm_drop < -thresholds["gross_margin_drop_pp"]:
-        out.append({"id": "A_GM", "指标": "毛利率变动(pp)", "本期值": gm_drop,
-                    "阈值": -thresholds["gross_margin_drop_pp"], "证据": {"来源": "TB 6001/6401"}})
+        out.append(_lower_than(
+            "A_GM", "毛利率变动(pp)", gm_drop, -thresholds["gross_margin_drop_pp"],
+            {"本期毛利率": metrics["毛利率"]["本期"], "上期毛利率": metrics["毛利率"]["上期"], "来源": "TB 6001/6401"},
+            pp_input=True,
+        ))
+
     cash_g = metrics["货币资金"]["环比"]
     if cash_g is not None and cash_g < -thresholds["cash_drop_pct"] / 100:
-        out.append({"id": "A_CASH", "指标": "货币资金环比降幅", "本期值": cash_g,
-                    "阈值": -thresholds["cash_drop_pct"] / 100,
-                    "证据": {"本期": metrics["货币资金"]["本期"], "上期": metrics["货币资金"]["上期"],
-                            "来源": "TB 1001/1002", "短期借款新增": metrics["短期借款"]["新增"]}})
+        out.append(_lower_than(
+            "A_CASH", "货币资金环比降幅", cash_g, -thresholds["cash_drop_pct"] / 100,
+            {
+                "本期": metrics["货币资金"]["本期"], "上期": metrics["货币资金"]["上期"],
+                "变动额": metrics["货币资金"]["变动额"], "来源": "TB 1001/1002",
+                "短期借款新增": metrics["短期借款"]["新增"],
+            },
+        ))
+
+    expense_rules = [
+        ("销售费用", "A_SELL_EXP", "TB 6601"),
+        ("管理费用", "A_ADM_EXP", "TB 6602"),
+        ("财务费用", "A_FIN_EXP", "TB 6603"),
+    ]
+    expense_threshold = thresholds["expense_growth_qoq_pct"] / 100
+    for name, anomaly_id, source in expense_rules:
+        growth = metrics[name]["环比"]
+        if growth is not None and growth > expense_threshold:
+            out.append(_higher_than(
+                anomaly_id, f"{name}环比增幅", growth, expense_threshold,
+                {"本期": metrics[name]["本期"], "上期": metrics[name]["上期"], "来源": source},
+            ))
     return out

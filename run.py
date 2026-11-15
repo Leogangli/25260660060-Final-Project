@@ -13,6 +13,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
+from src.analysis import ANALYSIS_RESPONSES, attribute_anomalies, write_analysis_outputs
 from src.core.orchestrator import Escalation, Orchestrator
 from src.deterministic.ingest import ingest_trial_balance, load_period_data
 from src.deterministic.metrics import compute_metrics, detect_anomalies
@@ -22,10 +23,12 @@ from src.deterministic.statements import (
     build_income_statement,
     write_statement_files,
 )
+from src.llm.client import get_client
 
 TB_PATH = Path("data/sample/trial_balance_2026Q3.csv")
 COA_PATH = Path("data/sample/chart_of_accounts.csv")
 CONFIG_PATH = Path("config/workflow.yaml")
+ANALYSIS_PROMPT_PATH = Path("prompts/analysis-agent.md")
 
 
 def run_workflow(
@@ -34,7 +37,7 @@ def run_workflow(
     run_root: str | Path = "runs",
     tb_path: str | Path = TB_PATH,
 ) -> Orchestrator:
-    """执行已接线的 S0/S1/S3，并保留既有 S4 确定性演示输出。"""
+    """执行已接线的 S0/S1/S3/S4。"""
     tb_path = Path(tb_path)
     cfg = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     orchestrator = Orchestrator(period, run_root=str(run_root), resume=resume)
@@ -75,17 +78,33 @@ def run_workflow(
         "S3_statements", statement_stage, [str(normalized_path), str(COA_PATH)]
     )
 
-    tb = pd.read_csv(normalized_path, dtype={"科目代码": str})
-    year, month = int(period[:4]), int(period[5:7])
-    previous = f"{year}-{month - 1:02d}" if month > 1 else f"{year - 1}-12"
-    metrics = compute_metrics(tb, period, previous)
-    anomalies = detect_anomalies(metrics, cfg["thresholds"])
-    print(f"\n期间 {period} 检出异常 {len(anomalies)} 条：")
-    for anomaly in anomalies:
-        print(
-            f"  - {anomaly['id']} {anomaly['指标']}: 本期值={anomaly['本期值']:.4f} "
-            f"阈值={anomaly['阈值']} 证据={anomaly['证据']}"
+    def analysis_stage():
+        tb = pd.read_csv(normalized_path, dtype={"科目代码": str})
+        year, month = int(period[:4]), int(period[5:7])
+        previous = f"{year}-{month - 1:02d}" if month > 1 else f"{year - 1}-12"
+        metrics = compute_metrics(tb, period, previous)
+        anomalies = detect_anomalies(metrics, cfg["thresholds"])
+        client = get_client(ANALYSIS_RESPONSES)
+        attributed = attribute_anomalies(
+            anomalies, client, ANALYSIS_PROMPT_PATH.read_text(encoding="utf-8")
         )
+        artifacts = write_analysis_outputs(metrics, attributed, orchestrator.run_dir, period)
+        print(f"\n期间 {period} 检出异常 {len(attributed)} 条：")
+        for anomaly in attributed:
+            print(
+                f"  - {anomaly['id']} {anomaly['指标']}: 本期值={anomaly['本期值']:.4f} "
+                f"阈值={anomaly['阈值']} 偏差={anomaly['偏差']}"
+            )
+        return artifacts
+
+    orchestrator.run_stage(
+        "S4_analysis",
+        analysis_stage,
+        [
+            str(normalized_path), str(orchestrator.run_dir / "bs.csv"),
+            str(orchestrator.run_dir / "is.csv"), str(CONFIG_PATH), str(ANALYSIS_PROMPT_PATH),
+        ],
+    )
 
     # TODO(Kimi Code): 按 docs/03 将 S2/S5/S6/S7/S8 接入 Orchestrator 阶段 DAG
     return orchestrator
