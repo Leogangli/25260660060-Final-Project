@@ -152,7 +152,7 @@ class Orchestrator:
     def human_approval_gate(
         self, input_files: list[str] | None = None, confirm_fn=None
     ) -> bool:
-        """人工批准后才返回 True；无交互输入时挂起，明确驳回则升级。"""
+        """仅本 run 的有效批准可放行；无人输入或驳回均挂起且不归档。"""
         input_hash = sha256_of_files(input_files or [])
         if self.state.is_fresh("S7_approval", input_hash):
             self.state.stages["S7_approval"].status = "skipped"
@@ -162,13 +162,17 @@ class Orchestrator:
             return True
 
         approval_path = self.run_dir / "approval.json"
+        record = None
         if approval_path.exists():
-            record = json.loads(approval_path.read_text(encoding="utf-8"))
-            if record.get("输入哈希") != input_hash:
-                self.state.stages["S7_approval"] = StageState(status="failed", input_hash=input_hash)
-                self.store.save(self.state)
-                self.escalate("批准记录与当前终稿哈希不一致", {"批准文件": str(approval_path)})
-        else:
+            candidate = json.loads(approval_path.read_text(encoding="utf-8"))
+            if candidate.get("run_id") == self.state.run_id and candidate.get("approved"):
+                if candidate.get("输入哈希") != input_hash:
+                    self.state.stages["S7_approval"] = StageState(status="failed", input_hash=input_hash)
+                    self.store.save(self.state)
+                    self.escalate("批准记录与当前终稿哈希不一致", {"批准文件": str(approval_path)})
+                record = candidate
+
+        if record is None:
             if confirm_fn is None:
                 def confirm_fn():
                     try:
@@ -196,10 +200,11 @@ class Orchestrator:
             approval_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
         if not record.get("approved") or not str(record.get("批准人", "")).strip():
-            self.state.stages["S7_approval"] = StageState(status="failed", input_hash=input_hash)
-            self.state.log_decision("驳回", "CFO 未批准或批准人为空")
+            self.state.stages["S7_approval"] = StageState(status="pending", input_hash=input_hash)
+            self.state.log_decision("驳回", "CFO 未批准或批准人为空，等待返回 S5 修订")
             self.store.save(self.state)
-            self.escalate("人工批准门未通过", {"批准文件": str(approval_path)})
+            print("[pending] S7_approval: 已驳回，等待返回 S5 修订；未执行归档")
+            return False
 
         self.state.mark_done("S7_approval", input_hash, [str(approval_path)])
         self.state.log_decision("批准", f"CFO {record['批准人']} 批准归档")
