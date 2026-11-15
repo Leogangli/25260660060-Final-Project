@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from run import run_workflow
+from src.core.orchestrator import Escalation
 from src.deterministic.ingest import BALANCE_COLUMN, ingest_trial_balance
 from src.deterministic.qc_checks import run_qc, write_qc_report
 
@@ -99,3 +100,30 @@ def test_run_workflow_s0_s1_and_resume(tmp_path: Path, capsys: pytest.CaptureFix
     assert resumed.state.stages["S0_ingest"].status == "skipped"
     assert resumed.state.stages["S1_qc"].status == "skipped"
     assert output.count("[skipped]") == 2
+
+
+
+def test_unbalanced_input_stops_at_s1(tmp_path: Path):
+    bad_tb = pd.read_csv(TB_PATH, dtype={"科目代码": str})
+    mask = (bad_tb["期间"] == "2026-10") & (bad_tb["科目代码"] == "1002")
+    bad_tb.loc[mask, BALANCE_COLUMN] += 100
+    bad_path = tmp_path / "runs" / "demo" / "坏数据.csv"
+    bad_path.parent.mkdir(parents=True)
+    bad_tb.to_csv(bad_path, index=False, encoding="utf-8-sig")
+    run_root = tmp_path / "runs"
+
+    with pytest.raises(Escalation, match="S1_qc"):
+        run_workflow("2026-10", run_root=run_root, tb_path=bad_path)
+
+    orchestrator_dir = run_root / "2026-10"
+    from src.core.state import StateStore
+
+    state = StateStore(orchestrator_dir).load()
+    assert state is not None
+    assert state.stages["S0_ingest"].status == "done"
+    assert state.stages["S1_qc"].status == "failed"
+    assert set(state.stages) == {"S0_ingest", "S1_qc"}
+    assert (orchestrator_dir / "escalation.md").exists()
+    report = (orchestrator_dir / "qc_report.md").read_text(encoding="utf-8")
+    assert "总体结论：FAIL" in report
+    assert "借贷平衡 | FAIL" in report

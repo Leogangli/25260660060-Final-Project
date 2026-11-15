@@ -13,7 +13,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from src.core.orchestrator import Orchestrator
+from src.core.orchestrator import Escalation, Orchestrator
 from src.deterministic.ingest import ingest_trial_balance, load_period_data
 from src.deterministic.metrics import compute_metrics, detect_anomalies
 from src.deterministic.qc_checks import run_qc, write_qc_report
@@ -23,8 +23,14 @@ COA_PATH = Path("data/sample/chart_of_accounts.csv")
 CONFIG_PATH = Path("config/workflow.yaml")
 
 
-def run_workflow(period: str, resume: bool = False, run_root: str | Path = "runs") -> Orchestrator:
+def run_workflow(
+    period: str,
+    resume: bool = False,
+    run_root: str | Path = "runs",
+    tb_path: str | Path = TB_PATH,
+) -> Orchestrator:
     """执行已接线的 S0/S1，并保留既有 S4 确定性演示输出。"""
+    tb_path = Path(tb_path)
     cfg = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     orchestrator = Orchestrator(period, run_root=str(run_root), resume=resume)
     normalized_path = orchestrator.run_dir / "tb_normalized.csv"
@@ -32,8 +38,8 @@ def run_workflow(period: str, resume: bool = False, run_root: str | Path = "runs
 
     orchestrator.run_stage(
         "S0_ingest",
-        lambda: [ingest_trial_balance(TB_PATH, orchestrator.run_dir, period)],
-        [str(TB_PATH)],
+        lambda: [ingest_trial_balance(tb_path, orchestrator.run_dir, period)],
+        [str(tb_path)],
     )
 
     def qc_stage():
@@ -71,8 +77,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--period", required=True, help="目标期间，如 2026-10")
     parser.add_argument("--resume", action="store_true", help="从检查点恢复")
+    parser.add_argument("--tb-path", default=str(TB_PATH), help="TB CSV 路径，默认使用合成样例")
     args = parser.parse_args()
-    run_workflow(args.period, resume=args.resume)
+    try:
+        run_workflow(args.period, resume=args.resume, tb_path=args.tb_path)
+    except Escalation as exc:
+        parser.exit(1, f"[escalated] {exc}；详见 runs/{args.period}/escalation.md\n")
 
 
 if __name__ == "__main__":
