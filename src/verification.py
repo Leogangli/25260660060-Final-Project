@@ -38,7 +38,8 @@ def _source_values(citation: str, tb: pd.DataFrame, metrics: dict, anomalies: li
         for current_period in [period, previous]:
             rows = tb[(tb["期间"] == current_period) & (tb["科目代码"].isin(codes))]
             amounts = [abs(float(value)) for value in rows[BALANCE_COLUMN]]
-            values.extend(amounts)
+            if len(codes) == 1:
+                values.extend(amounts)
             if amounts:
                 values.append(abs(float(rows[BALANCE_COLUMN].sum())))
     for name, metric in metrics.items():
@@ -107,7 +108,14 @@ def verify_report(
         if not expected_values:
             _issue(issues, "引用溯源", f"数字 {token} 的来源无法识别：{citation}", "改用 TB、BS/IS 或指标表有效行")
         elif not _matches(actual, expected_values):
-            _issue(issues, "数字正确性", f"报告值 {token} 与来源 {citation} 的重算值不一致", "按确定性重算结果修正数字")
+            recalculated = " / ".join(
+                f"{value:,.2f}".rstrip("0").rstrip(".") for value in dict.fromkeys(expected_values)
+            )
+            _issue(
+                issues, "数字正确性",
+                f"报告原文 {token} vs 重算值 {recalculated} vs 来源 {citation}",
+                "按确定性重算结果修正数字",
+            )
 
     for anomaly in anomalies:
         heading = f"### {anomaly['id']}"

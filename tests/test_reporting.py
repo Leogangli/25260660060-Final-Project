@@ -55,3 +55,20 @@ def test_verifier_rejects_missing_anomaly_and_future_period(data):
 
     assert any(issue["维度"] == "覆盖检查" and "A_INV" in issue["证据"] for issue in issues)
     assert any(issue["维度"] == "口径与边界" and "2026-11" in issue["证据"] for issue in issues)
+
+
+
+def test_verifier_shows_report_recalculation_and_source(data):
+    report, tb, metrics, anomalies, thresholds = data
+    report = report.replace(
+        "| 货币资金 | 140万元（来源：TB 1001+1002）",
+        "| 货币资金 | 1,400万元（来源：TB 1001+1002）",
+        1,
+    )
+    issues = verify_report(report, tb, metrics, anomalies, thresholds)
+
+    mismatch = next(issue for issue in issues if "1,400" in issue["证据"])
+    assert mismatch["严重级"] == "阻塞"
+    assert "报告原文 1,400" in mismatch["证据"]
+    assert "重算值 140" in mismatch["证据"]
+    assert "来源 TB 1001+1002" in mismatch["证据"]
