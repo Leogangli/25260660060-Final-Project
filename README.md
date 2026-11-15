@@ -36,6 +36,7 @@ runs/                          运行产物（已 gitignore）
 - 演示运行：`python3 run.py --period 2026-10`
 - 中断恢复演示：`python3 run.py --period 2026-10 --resume`（详见 docs/03 验收清单）
 - 测试：`python3 -m pytest tests/ -v`
+- 跑测试前需安装开发依赖：`pip install -r requirements-dev.txt`
 - 默认使用 Mock LLM（基于规则的可复现输出）；接入真实 LLM 时通过环境变量配置密钥，**密钥不入库**
 
 ## 本人贡献说明
