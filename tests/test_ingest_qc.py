@@ -86,20 +86,24 @@ def test_qc_report_contains_every_finding(data, tmp_path: Path):
         assert finding["check"] in report
 
 
-def test_run_workflow_s0_s1_and_resume(tmp_path: Path, capsys: pytest.CaptureFixture):
+def test_run_workflow_s0_s1_s3_and_resume(tmp_path: Path, capsys: pytest.CaptureFixture):
     run_root = tmp_path / "runs"
     first = run_workflow("2026-10", run_root=run_root)
     assert first.state.stages["S0_ingest"].status == "done"
     assert first.state.stages["S1_qc"].status == "done"
+    assert first.state.stages["S3_statements"].status == "done"
     assert (run_root / "2026-10" / "tb_normalized.csv").exists()
     assert "总体结论：PASS" in (run_root / "2026-10" / "qc_report.md").read_text(encoding="utf-8")
+    for name in ["bs.csv", "bs.md", "is.csv", "is.md"]:
+        assert (run_root / "2026-10" / name).exists()
 
     capsys.readouterr()
     resumed = run_workflow("2026-10", resume=True, run_root=run_root)
     output = capsys.readouterr().out
     assert resumed.state.stages["S0_ingest"].status == "skipped"
     assert resumed.state.stages["S1_qc"].status == "skipped"
-    assert output.count("[skipped]") == 2
+    assert resumed.state.stages["S3_statements"].status == "skipped"
+    assert output.count("[skipped]") == 3
 
 
 

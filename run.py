@@ -17,6 +17,11 @@ from src.core.orchestrator import Escalation, Orchestrator
 from src.deterministic.ingest import ingest_trial_balance, load_period_data
 from src.deterministic.metrics import compute_metrics, detect_anomalies
 from src.deterministic.qc_checks import run_qc, write_qc_report
+from src.deterministic.statements import (
+    build_balance_sheet,
+    build_income_statement,
+    write_statement_files,
+)
 
 TB_PATH = Path("data/sample/trial_balance_2026Q3.csv")
 COA_PATH = Path("data/sample/chart_of_accounts.csv")
@@ -29,7 +34,7 @@ def run_workflow(
     run_root: str | Path = "runs",
     tb_path: str | Path = TB_PATH,
 ) -> Orchestrator:
-    """执行已接线的 S0/S1，并保留既有 S4 确定性演示输出。"""
+    """执行已接线的 S0/S1/S3，并保留既有 S4 确定性演示输出。"""
     tb_path = Path(tb_path)
     cfg = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     orchestrator = Orchestrator(period, run_root=str(run_root), resume=resume)
@@ -53,8 +58,21 @@ def run_workflow(
             raise ValueError("QC 硬门禁失败，停止进入下游")
         return [qc_report_path]
 
+    orchestrator.run_stage("S1_qc", qc_stage, [str(normalized_path), str(COA_PATH)])
+
+    def statement_stage():
+        tb = pd.read_csv(normalized_path, dtype={"科目代码": str})
+        coa = pd.read_csv(COA_PATH, dtype={"科目代码": str})
+        balance_sheet = build_balance_sheet(tb, coa, period)
+        income_statement = build_income_statement(tb, coa, period)
+        return write_statement_files(
+            balance_sheet, orchestrator.run_dir, "bs", "资产负债表简表", period
+        ) + write_statement_files(
+            income_statement, orchestrator.run_dir, "is", "利润表简表", period
+        )
+
     orchestrator.run_stage(
-        "S1_qc", qc_stage, [str(normalized_path), str(COA_PATH)]
+        "S3_statements", statement_stage, [str(normalized_path), str(COA_PATH)]
     )
 
     tb = pd.read_csv(normalized_path, dtype={"科目代码": str})
@@ -69,7 +87,7 @@ def run_workflow(
             f"阈值={anomaly['阈值']} 证据={anomaly['证据']}"
         )
 
-    # TODO(Kimi Code): 按 docs/03 将 S2/S3/S5/S6/S7/S8 接入 Orchestrator 阶段 DAG
+    # TODO(Kimi Code): 按 docs/03 将 S2/S5/S6/S7/S8 接入 Orchestrator 阶段 DAG
     return orchestrator
 
 
