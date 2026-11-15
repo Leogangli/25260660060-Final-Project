@@ -1,0 +1,47 @@
+# FinClose 月度关账工作流配置
+workflow:
+  name: finclose-monthly
+  version: "0.1.0"
+
+schedule:
+  cron: "0 6 1 * *"          # 每月1日 06:00
+  inbox_dir: data/inbox/     # 事件触发：新 TB 落盘
+
+stages:                       # 阶段 DAG（按依赖顺序）
+  - {id: S0_ingest,     type: deterministic, agent: ingest}
+  - {id: S1_qc,         type: deterministic, agent: qc, gate: hard}   # 硬门禁：失败即停止+上报
+  - {id: S2_closecheck, type: llm_assisted,  agent: closecheck}
+  - {id: S3_statements, type: deterministic, agent: statements}
+  - {id: S4_analysis,   type: hybrid,        agent: analysis}          # 指标=代码，归因=LLM
+  - {id: S5_report,     type: llm,           agent: report_writer}
+  - {id: S6_verify,     type: independent,   agent: verifier}          # 与 Writer 上下文隔离
+  - {id: S7_approval,   type: human_gate,    required: true}
+  - {id: S8_archive,    type: deterministic, agent: archive}
+
+revision_loop:
+  stages: [S5_report, S6_verify]
+  max_rounds: 2               # 有界修订：超过则升级人工
+
+retry:
+  max_attempts: 3
+  backoff_seconds: [1, 4, 16] # 指数退避
+
+limits:
+  max_run_minutes: 30
+  llm_token_budget: 200000    # 单 run LLM token 上限
+  fs_read_whitelist: [data/, archive/, config/, prompts/]
+  fs_write_whitelist: [runs/]
+  network_egress: false
+
+thresholds:                   # 异常检测阈值（S4 规则引擎读取）
+  ar_growth_qoq_pct: 20       # 应收账款环比增幅 >
+  ar_vs_revenue_gap_pp: 10    # 应收增幅 - 收入增幅 >
+  inventory_growth_qoq_pct: 25
+  gross_margin_drop_pp: 2     # 毛利率下降（百分点）
+  cash_drop_pct: 50           # 货币资金降幅 >
+  expense_growth_qoq_pct: 15
+
+data_policy:
+  period_lock: true           # 只允许访问 <= period_end 的数据
+  sample_data_only: true      # 禁止真实公司数据
+  no_credentials_in_repo: true
