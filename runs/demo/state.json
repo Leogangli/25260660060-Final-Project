@@ -1,0 +1,101 @@
+{
+  "period": "demo",
+  "run_id": "demo-1794728137",
+  "stages": {
+    "S0_ingest": {
+      "status": "done",
+      "input_hash": "6293f088ed0250e5f3f923004ecaf4d227c94be1e568bd49d061ecaa612b5ea9",
+      "artifacts": [
+        "标准化TB.csv"
+      ],
+      "finished_at": 1794728157.0704618
+    },
+    "S1_qc": {
+      "status": "done",
+      "input_hash": "6293f088ed0250e5f3f923004ecaf4d227c94be1e568bd49d061ecaa612b5ea9",
+      "artifacts": [
+        "QC报告.md"
+      ],
+      "finished_at": 1794728157.0718868
+    },
+    "S2_closecheck": {
+      "status": "pending",
+      "input_hash": null,
+      "artifacts": [],
+      "finished_at": null
+    },
+    "S3_statements": {
+      "status": "pending",
+      "input_hash": null,
+      "artifacts": [],
+      "finished_at": null
+    },
+    "S4_analysis": {
+      "status": "pending",
+      "input_hash": null,
+      "artifacts": [],
+      "finished_at": null
+    },
+    "S5_report": {
+      "status": "pending",
+      "input_hash": null,
+      "artifacts": [],
+      "finished_at": null
+    },
+    "S6_verify": {
+      "status": "pending",
+      "input_hash": null,
+      "artifacts": [],
+      "finished_at": null
+    },
+    "S7_approval": {
+      "status": "pending",
+      "input_hash": null,
+      "artifacts": [],
+      "finished_at": null
+    },
+    "S8_archive": {
+      "status": "pending",
+      "input_hash": null,
+      "artifacts": [],
+      "finished_at": null
+    }
+  },
+  "decisions": [
+    {
+      "ts": 1794728137.282102,
+      "decision": "完成",
+      "reason": "S0_ingest 第 1 次尝试成功"
+    },
+    {
+      "ts": 1794728137.2899415,
+      "decision": "完成",
+      "reason": "S1_qc 第 1 次尝试成功"
+    },
+    {
+      "ts": 1794728146.371381,
+      "decision": "跳过",
+      "reason": "S0_ingest 已完成且输入哈希未变"
+    },
+    {
+      "ts": 1794728146.3724618,
+      "decision": "跳过",
+      "reason": "S1_qc 已完成且输入哈希未变"
+    },
+    {
+      "ts": 1794728157.0684388,
+      "decision": "失效",
+      "reason": "S0_ingest 输入哈希变化，本阶段及下游置为 pending"
+    },
+    {
+      "ts": 1794728157.070467,
+      "decision": "完成",
+      "reason": "S0_ingest 第 1 次尝试成功"
+    },
+    {
+      "ts": 1794728157.0718908,
+      "decision": "完成",
+      "reason": "S1_qc 第 1 次尝试成功"
+    }
+  ]
+}

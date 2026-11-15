@@ -1,0 +1,8 @@
+[done] S0_ingest
+[PASS] 期间格式: {}
+[PASS] 必填字段: {}
+[PASS] 期间锁定: {}
+[FAIL] 借贷平衡: {'代数和': 100.0, '容差': 0.005}
+[PASS] 未知科目: {}
+[PASS] 余额方向: {}
+[escalated] S1_qc 执行失败；详见 runs/2026-10/escalation.md

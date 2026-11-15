@@ -1,0 +1,5 @@
+[skipped] S0_ingest: 输入哈希未变
+[skipped] S1_qc: 输入哈希未变
+[state] S0_ingest=skipped
+[state] S1_qc=skipped
+[assert] resume 未重跑 S0/S1，检查通过

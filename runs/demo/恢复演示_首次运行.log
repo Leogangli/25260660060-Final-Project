@@ -1,0 +1,5 @@
+[execute] S0_ingest: 摄取第一版输入
+[done] S0_ingest
+[execute] S1_qc: 执行数据质检
+[done] S1_qc
+[interrupted] S1_qc 完成后模拟进程中断（退出码 137）

@@ -1,0 +1,5 @@
+S0_ingest=done
+S1_qc=failed
+状态台账仅含 S0/S1；S1 之后已执行阶段：[]
+升级文件存在：runs\2026-10\escalation.md
+[assert] QC 不平衡触发硬门禁，下游未执行

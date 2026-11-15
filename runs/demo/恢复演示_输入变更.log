@@ -1,0 +1,6 @@
+[re-run] S0_ingest: 检测到输入哈希变化
+[done] S0_ingest
+[state] S0 重跑后，S1_qc=pending
+[re-run] S1_qc: 上游失效后重新质检
+[done] S1_qc
+[assert] 输入变化使 S0 及下游 S1 失效并重跑，检查通过
