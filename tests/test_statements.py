@@ -92,3 +92,12 @@ def test_csv_and_markdown_outputs(data, tmp_path: Path):
     markdown = md_path.read_text(encoding="utf-8")
     assert "利润表简表" in markdown
     assert "营业利润 | 1220 | 6001,6401,6601,6602,6603" in markdown
+
+
+
+def test_missing_statement_mapping_raises(data):
+    tb, coa = data
+    coa.loc[coa["科目代码"] == "1122", "报表映射"] = ""
+
+    with pytest.raises(ValueError, match="未映射报表项目"):
+        build_balance_sheet(tb, coa, "2026-10")

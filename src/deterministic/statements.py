@@ -22,6 +22,11 @@ def _current_rows(tb: pd.DataFrame, coa: pd.DataFrame, period: str) -> pd.DataFr
     if merged["类别"].isna().any():
         unknown = merged.loc[merged["类别"].isna(), "科目代码"].astype(str).tolist()
         raise ValueError(f"存在未映射科目：{unknown}")
+    statement_mappings = merged["报表映射"].astype("string").str.strip()
+    unmapped = statement_mappings.isna() | statement_mappings.eq("").fillna(False)
+    if unmapped.any():
+        codes = merged.loc[unmapped, "科目代码"].drop_duplicates().astype(str).tolist()
+        raise ValueError(f"存在未映射报表项目的科目：{codes}")
     return merged
 
 
