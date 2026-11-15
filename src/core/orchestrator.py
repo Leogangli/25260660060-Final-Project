@@ -5,7 +5,9 @@
 """
 from __future__ import annotations
 
+import json
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .state import RunState, StageState, StateStore, sha256_of_files
@@ -147,9 +149,63 @@ class Orchestrator:
 
         raise AssertionError("修订循环不可达")
 
-    def human_approval_gate(self) -> bool:
-        """S7：挂起等待人工批准（CLI 确认或 approval.json 落盘）。Orchestrator 无权自行放行。"""
-        raise NotImplementedError("TODO(Kimi Code): 见 docs/03 P6")
+    def human_approval_gate(
+        self, input_files: list[str] | None = None, confirm_fn=None
+    ) -> bool:
+        """人工批准后才返回 True；无交互输入时挂起，明确驳回则升级。"""
+        input_hash = sha256_of_files(input_files or [])
+        if self.state.is_fresh("S7_approval", input_hash):
+            self.state.stages["S7_approval"].status = "skipped"
+            self.state.log_decision("跳过", "人工批准记录仍有效")
+            self.store.save(self.state)
+            print("[skipped] S7_approval: 人工批准记录仍有效")
+            return True
+
+        approval_path = self.run_dir / "approval.json"
+        if approval_path.exists():
+            record = json.loads(approval_path.read_text(encoding="utf-8"))
+            if record.get("输入哈希") != input_hash:
+                self.state.stages["S7_approval"] = StageState(status="failed", input_hash=input_hash)
+                self.store.save(self.state)
+                self.escalate("批准记录与当前终稿哈希不一致", {"批准文件": str(approval_path)})
+        else:
+            if confirm_fn is None:
+                def confirm_fn():
+                    try:
+                        approver = input("请输入 CFO 批准人：").strip()
+                        answer = input("是否批准归档？[y/N]：").strip().lower()
+                        comment = input("批准意见（可留空）：").strip()
+                    except EOFError:
+                        return None
+                    return {"approved": answer == "y", "批准人": approver, "意见": comment}
+
+            decision = confirm_fn()
+            if decision is None:
+                self.state.stages["S7_approval"] = StageState(status="pending", input_hash=input_hash)
+                self.state.log_decision("挂起", "等待人工批准信号 approval.json")
+                self.store.save(self.state)
+                print(f"[pending] S7_approval: 等待人工批准，未执行归档；批准文件={approval_path}")
+                return False
+            record = {
+                **decision,
+                "period": self.period,
+                "run_id": self.state.run_id,
+                "输入哈希": input_hash,
+                "批准时间": datetime.now(timezone.utc).isoformat(),
+            }
+            approval_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        if not record.get("approved") or not str(record.get("批准人", "")).strip():
+            self.state.stages["S7_approval"] = StageState(status="failed", input_hash=input_hash)
+            self.state.log_decision("驳回", "CFO 未批准或批准人为空")
+            self.store.save(self.state)
+            self.escalate("人工批准门未通过", {"批准文件": str(approval_path)})
+
+        self.state.mark_done("S7_approval", input_hash, [str(approval_path)])
+        self.state.log_decision("批准", f"CFO {record['批准人']} 批准归档")
+        self.store.save(self.state)
+        print(f"[done] S7_approval: {record['批准人']} 已批准")
+        return True
 
     def escalate(self, reason: str, context: dict):
         (self.run_dir / "escalation.md").write_text(

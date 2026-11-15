@@ -86,10 +86,14 @@ def test_qc_report_contains_every_finding(data, tmp_path: Path):
         assert finding["check"] in report
 
 
-def test_run_workflow_through_s6_and_resume(tmp_path: Path, capsys: pytest.CaptureFixture):
+def test_run_workflow_through_s8_and_resume(tmp_path: Path, capsys: pytest.CaptureFixture):
     run_root = tmp_path / "runs"
-    first = run_workflow("2026-10", run_root=run_root)
-    stage_ids = ["S0_ingest", "S1_qc", "S2_closecheck", "S3_statements", "S4_analysis", "S5_report", "S6_verify"]
+    approval = lambda: {"approved": True, "批准人": "测试CFO", "意见": "同意归档"}
+    first = run_workflow("2026-10", run_root=run_root, approval_handler=approval)
+    stage_ids = [
+        "S0_ingest", "S1_qc", "S2_closecheck", "S3_statements", "S4_analysis",
+        "S5_report", "S6_verify", "S7_approval", "S8_archive",
+    ]
     for stage_id in stage_ids:
         assert first.state.stages[stage_id].status == "done"
     assert (run_root / "2026-10" / "tb_normalized.csv").exists()
@@ -97,6 +101,7 @@ def test_run_workflow_through_s6_and_resume(tmp_path: Path, capsys: pytest.Captu
     for name in [
         "closecheck_report.md", "bs.csv", "bs.md", "is.csv", "is.md",
         "metrics.csv", "anomalies.json", "anomalies.md", "report_v1.md", "verify_report_r1.md",
+        "approval.json", "baseline.json", "next_trigger.json", "archive/v1/manifest.json",
     ]:
         assert (run_root / "2026-10" / name).exists()
     assert "总体结论：PASS" in (run_root / "2026-10" / "verify_report_r1.md").read_text(encoding="utf-8")
@@ -106,7 +111,8 @@ def test_run_workflow_through_s6_and_resume(tmp_path: Path, capsys: pytest.Captu
     output = capsys.readouterr().out
     for stage_id in stage_ids:
         assert resumed.state.stages[stage_id].status == "skipped"
-    assert output.count("[skipped]") == 7
+    assert output.count("[skipped]") == 9
+    assert not (run_root / "2026-10" / "archive" / "v2").exists()
 
 
 

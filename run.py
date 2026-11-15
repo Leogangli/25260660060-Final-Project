@@ -15,6 +15,7 @@ import pandas as pd
 import yaml
 
 from src.analysis import ANALYSIS_RESPONSES, attribute_anomalies, write_analysis_outputs
+from src.archive import archive_run
 from src.closecheck import CLOSECHECK_RESPONSES, write_closecheck_report
 from src.core.orchestrator import Escalation, Orchestrator
 from src.deterministic.ingest import ingest_trial_balance, load_period_data
@@ -48,8 +49,9 @@ def run_workflow(
     resume: bool = False,
     run_root: str | Path = "runs",
     tb_path: str | Path = TB_PATH,
+    approval_handler=None,
 ) -> Orchestrator:
-    """执行已接线的 S0 至 S6，人工批准与归档留待 P6。"""
+    """执行 S0 至 S8；未获人工批准时在 S7 挂起且不归档。"""
     tb_path = Path(tb_path)
     previous = _previous_period(period)
     cfg = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
@@ -162,7 +164,22 @@ def run_workflow(
         ],
     )
 
-    # TODO(Kimi Code): 按 docs/03 将 S7/S8 接入 Orchestrator 阶段 DAG
+    report_path = Path(orchestrator.state.stages["S5_report"].artifacts[-1])
+    verify_path = Path(orchestrator.state.stages["S6_verify"].artifacts[-1])
+    approved = orchestrator.human_approval_gate(
+        [str(report_path), str(verify_path)], confirm_fn=approval_handler
+    )
+    if not approved:
+        return orchestrator
+
+    orchestrator.run_stage(
+        "S8_archive",
+        lambda: archive_run(orchestrator.run_dir, period, CONFIG_PATH),
+        [
+            str(orchestrator.run_dir / "approval.json"), str(report_path), str(verify_path),
+            str(orchestrator.run_dir / "metrics.csv"), str(CONFIG_PATH),
+        ],
+    )
     return orchestrator
 
 

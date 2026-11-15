@@ -39,6 +39,13 @@ runs/                          运行产物（已 gitignore）
 - 跑测试前需安装开发依赖：`pip install -r requirements-dev.txt`
 - 默认使用 Mock LLM（基于规则的可复现输出）；接入真实 LLM 时通过环境变量配置密钥，**密钥不入库**
 
+## 人工批准与调度
+
+- S6 通过后，CLI 会要求输入 CFO 批准人、批准决定和意见；批准前不会执行 S8 归档。
+- 非交互运行时 S7 挂起，等待 `runs/<period>/approval.json`；获得有效批准后执行 `python3 run.py --period <YYYY-MM> --resume` 续跑。
+- 归档保存在 `runs/<period>/archive/v<n>/`，版本不可覆盖；同时生成 `baseline.json` 和 `next_trigger.json`。
+- crontab 示例（每月 1 日 06:00，替换项目路径和期间）：`0 6 1 * * cd /path/to/project && python3 run.py --period 2026-10 --resume >> runs/cron.log 2>&1`
+
 ## 本人贡献说明
 
 - 任务选型、业务流程与验收标准来自本人 20 余年财务工作及现任财务总监岗位的实际实践；
