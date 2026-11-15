@@ -1,0 +1,9 @@
+[input] 使用已投毒 report_v1.md：货币资金 1,400 万元
+[done] S5_report: report_v1.md
+[verify] 第 1 轮：REJECT，阻塞问题 1 项
+[retry] S5_report: 根据核验问题执行第 1/2 轮修订
+[route] Writer 收到修复任务包：[{"问题ID": "V001", "严重级": "阻塞", "维度": "数字正确性", "证据": "报告原文 1,400 vs 重算值 140 / 1,915 vs 来源 TB 1001+1002", "修复建议": "按确定性重算结果修正数字"}]
+[done] S5_report: report_v2.md
+[verify] 第 2 轮：PASS，阻塞问题 0 项
+[done] S6_verify: PASS
+[assert] v1 投毒被拦截，v2 修复为 140 万元并 PASS
